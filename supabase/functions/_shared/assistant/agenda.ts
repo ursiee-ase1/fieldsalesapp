@@ -108,7 +108,7 @@ export function templateQuestion(i: AgendaItem, ctx: AssistantContext): string {
     case 'consent':
       return `Did ${d.name} agree for us to keep their phone number?`;
     case 'payment':
-      return `For the ${d.quantity} ${d.product}, was that cash or Mobile Money?`;
+      return `Was that sale of ${d.product} paid in cash or Mobile Money?`;
     case 'sales':
       return 'How many sales have you made today?';
     case 'more_sales':
@@ -120,8 +120,8 @@ export function templateQuestion(i: AgendaItem, ctx: AssistantContext): string {
     case 'stock_count': {
       const last = d.last_count as { quantity: number } | null;
       return last
-        ? `Last time you reported having ${last.quantity} ${d.product}. How many do you have now?`
-        : `How many ${d.product} do you have left?`;
+        ? `Last time you had ${last.quantity} left of ${d.product}. How many do you have now?`
+        : `How many do you have left of ${d.product}?`;
     }
     case 'prospects':
       return "How many people did you speak to who haven't bought yet?";

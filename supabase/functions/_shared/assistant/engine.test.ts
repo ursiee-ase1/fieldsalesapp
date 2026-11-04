@@ -232,7 +232,7 @@ test('contextual memory: stock and follow-up questions use yesterday\'s data', (
 
   const d2: Draft = { ...emptyDraft(), no_sales: true, asked: ['follow_up_outcomes'] };
   const o2 = openingTurn({ draft: d2, status: 'active', ctx: withFollowUp }, false);
-  assert.match(o2.reply, /Last time you reported having 5 Book A\. How many do you have now\?/);
+  assert.match(o2.reply, /Last time you had 5 left of Book A\. How many do you have now\?/);
 });
 
 test('malformed LLM output is ignored safely', () => {

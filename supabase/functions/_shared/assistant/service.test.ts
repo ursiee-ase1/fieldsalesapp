@@ -188,3 +188,28 @@ test('the confirm button only works once the report is ready', async () => {
     /not ready/,
   );
 });
+
+test('the Finish button goes straight to the summary when nothing essential is missing', async () => {
+  const { db, calls } = fakeDb();
+  const model = llm([{ intent: 'continue', operations: [op({ op: 'declare_no_sales' })] }]);
+  const svc = new AssistantService({ db, khaya: null, newId: randomUUID, llm: model });
+  const start = await svc.handle({ action: 'start', channel: 'app_text', language: 'en' });
+  const t = await svc.handle({ action: 'turn', session_id: 'sess-1', draft_version: start.draft_version, language: 'en', text: 'No sales' });
+  assert.equal(t.action, 'ask', 'stock count still being asked');
+
+  const f = await svc.handle({ action: 'finish', session_id: 'sess-1', draft_version: t.draft_version, language: 'en' });
+  assert.equal(f.action, 'summary');
+  assert.equal(f.status, 'awaiting_confirmation');
+  assert.ok(f.summary!.includes('Stock not counted: Book A.'));
+  assert.equal(model.seen.length, 1, 'no LLM call for the button');
+  assert.equal(calls.filter((c) => c.fn === 'submit_report').length, 0, 'still needs confirmation');
+});
+
+test('the Finish button asks only for what is essential', async () => {
+  const { db } = fakeDb();
+  const svc = new AssistantService({ db, khaya: null, newId: randomUUID, llm: llm([]) });
+  const start = await svc.handle({ action: 'start', channel: 'app_text', language: 'en' });
+  const f = await svc.handle({ action: 'finish', session_id: 'sess-1', draft_version: start.draft_version, language: 'en' });
+  assert.equal(f.action, 'ask');
+  assert.equal(f.reply_text, 'Before I can send your report, I need one more answer. How many sales have you made today?');
+});

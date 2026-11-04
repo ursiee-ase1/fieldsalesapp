@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GeminiProvider, toGeminiSchema } from './gemini.ts';
+import { FallbackProvider } from './fallback.ts';
+import { selectProvider } from './select.ts';
+import { LlmError } from './types.ts';
+import type { LlmProvider } from './types.ts';
 import { EXTRACTION_SCHEMA } from '../assistant/prompts.ts';
 
 test('the extraction schema converts to Gemini\'s OpenAPI subset', () => {
@@ -33,10 +37,77 @@ test('Gemini adapter sends the key in a header and ignores thought parts', async
 });
 
 test('Gemini errors are classified as retryable or not', async () => {
-  const rateLimited = (async () => new Response('slow down', { status: 429 })) as unknown as typeof fetch;
-  await assert.rejects(new GeminiProvider('k', 'm', rateLimited).generateText('s', 'u', 100),
+  let busyCalls = 0;
+  const rateLimited = (async () => { busyCalls++; return new Response('slow down', { status: 429 }); }) as unknown as typeof fetch;
+  await assert.rejects(new GeminiProvider('k', 'm', rateLimited, 1).generateText('s', 'u', 100),
     (e: { retryable: boolean }) => e.retryable === true);
-  const badKey = (async () => new Response('bad key', { status: 403 })) as unknown as typeof fetch;
-  await assert.rejects(new GeminiProvider('k', 'm', badKey).generateText('s', 'u', 100),
+  assert.equal(busyCalls, 3, 'retried before giving up');
+
+  let keyCalls = 0;
+  const badKey = (async () => { keyCalls++; return new Response('bad key', { status: 403 }); }) as unknown as typeof fetch;
+  await assert.rejects(new GeminiProvider('k', 'm', badKey, 1).generateText('s', 'u', 100),
     (e: { retryable: boolean }) => e.retryable === false);
+  assert.equal(keyCalls, 1, 'a bad key is not retried');
+});
+
+test('a "high demand" 503 is retried and then succeeds', async () => {
+  let n = 0;
+  const busyThenOk = (async () => {
+    n++;
+    if (n === 1) {
+      return new Response(JSON.stringify({ error: { code: 503, message: 'This model is currently experiencing high demand.' } }),
+        { status: 503 });
+    }
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Hello' }] } }] }));
+  }) as unknown as typeof fetch;
+  const r = await new GeminiProvider('k', 'm', busyThenOk, 1).generateText('s', 'u', 100);
+  assert.equal(r.text, 'Hello');
+  assert.equal(n, 2);
+});
+
+function stub(name: string, outcome: 'ok' | 'busy' | 'broken'): LlmProvider & { calls: number } {
+  return {
+    name,
+    calls: 0,
+    async generateJson() {
+      this.calls++;
+      if (outcome === 'busy') throw new LlmError(`${name} busy`, true);
+      if (outcome === 'broken') throw new LlmError(`${name} bad key`, false);
+      return { value: { from: name }, usage: { input_tokens: 1, output_tokens: 1 } };
+    },
+    async generateText() {
+      this.calls++;
+      if (outcome !== 'ok') throw new LlmError(`${name} down`, outcome === 'busy');
+      return { text: name, usage: { input_tokens: 1, output_tokens: 1 } };
+    },
+  };
+}
+
+test('a busy model hands over to the next one', async () => {
+  const first = stub('gemini:a', 'busy');
+  const second = stub('gemini:b', 'ok');
+  const f = new FallbackProvider([first, second]);
+  const r = await f.generateJson('s', 'u', {});
+  assert.deepEqual(r.value, { from: 'gemini:b' });
+  assert.equal(f.lastUsed, 'gemini:b');
+});
+
+test('a configuration error is not hidden by switching models', async () => {
+  const first = stub('anthropic', 'broken');
+  const second = stub('gemini', 'ok');
+  await assert.rejects(new FallbackProvider([first, second]).generateText('s', 'u', 10), /bad key|down/);
+  assert.equal(second.calls, 0);
+});
+
+// The Claude adapter imports an npm: package that only Deno can load, so
+// orderings involving Claude are not exercised under Node.
+test('provider order: Gemini alone, or with a backup model', async () => {
+  const only = await selectProvider((k) => ({ GEMINI_API_KEY: 'g' } as Record<string, string>)[k]);
+  assert.equal(only.name, 'gemini:gemini-3.1-flash-lite');
+
+  const withBackup = await selectProvider((k) =>
+    ({ GEMINI_API_KEY: 'g', GEMINI_FALLBACK_MODEL: 'gemini-backup' } as Record<string, string>)[k]);
+  assert.equal(withBackup.name, 'gemini:gemini-3.1-flash-lite > gemini:gemini-backup');
+
+  await assert.rejects(selectProvider(() => undefined), /No LLM configured/);
 });

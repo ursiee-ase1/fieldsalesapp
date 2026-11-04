@@ -36,15 +36,34 @@ export class GeminiProvider implements LlmProvider {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly doFetch: typeof fetch;
+  private readonly retryDelayMs: number;
 
-  constructor(apiKey: string, model = 'gemini-3.1-flash-lite', doFetch: typeof fetch = fetch) {
+  constructor(apiKey: string, model = 'gemini-3.1-flash-lite', doFetch: typeof fetch = fetch, retryDelayMs = 700) {
     this.apiKey = apiKey;
     this.model = model;
     this.doFetch = doFetch;
+    this.retryDelayMs = retryDelayMs;
     this.name = `gemini:${model}`;
   }
 
+  /** Up to 3 attempts when Gemini is busy (429/5xx) or unreachable; other errors fail at once. */
   private async call(system: string, user: string, generationConfig: Record<string, unknown>) {
+    let last: LlmError | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, this.retryDelayMs * 2 ** (attempt - 1) * (1 + Math.random() * 0.3)));
+      }
+      try {
+        return await this.callOnce(system, user, generationConfig);
+      } catch (e) {
+        if (!(e instanceof LlmError) || !e.retryable) throw e;
+        last = e;
+      }
+    }
+    throw last!;
+  }
+
+  private async callOnce(system: string, user: string, generationConfig: Record<string, unknown>) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
     let res: Response;
     try {

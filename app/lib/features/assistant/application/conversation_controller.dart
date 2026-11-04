@@ -32,6 +32,9 @@ class ConversationController extends ChangeNotifier {
   ConversationPhase phase = ConversationPhase.starting;
   final List<ChatLine> lines = [];
   String partial = '';
+
+  /// Gentle guidance shown by the microphone, e.g. when nothing was heard.
+  String? hint;
   List<String>? summary;
   List<String> notices = const [];
   String? error;
@@ -87,6 +90,12 @@ class ConversationController extends ChangeNotifier {
         await _voice.stopOutput(); // interrupt the assistant
         await _listen();
       case ConversationPhase.listening:
+        if (partial.trim().isEmpty) {
+          // Listening already started by itself after the question. A tap now
+          // usually means "I want to talk", so keep listening.
+          _set(() => hint = "I'm listening. Go ahead and speak, then tap when you finish.");
+          return;
+        }
         await _voice.stopInput(); // English: the final words are sent by _listen
       case ConversationPhase.recording:
         await _sendRecording();
@@ -102,6 +111,19 @@ class ConversationController extends ChangeNotifier {
     await _voice.stopOutput();
     await _run(() => _api.confirm(_sessionId!, _version, language: _language, voiceOut: voiceMode));
   }
+
+  /// "Finish report": go to the summary now (or answer the one essential
+  /// question still open).
+  Future<void> finish() async {
+    if (busy || _sessionId == null) return;
+    await _voice.stopOutput();
+    await _voice.stopInput();
+    _set(() => hint = null);
+    await _run(() => _api.finish(_sessionId!, _version, language: _language, voiceOut: voiceMode));
+  }
+
+  /// Whether "Finish report" makes sense right now.
+  bool get canFinish => _sessionId != null && summary == null && !submitted && phase != ConversationPhase.finished;
 
   /// Back to answering questions after seeing the summary.
   Future<void> makeChanges() async {
@@ -151,21 +173,31 @@ class ConversationController extends ChangeNotifier {
     _set(() {
       phase = ConversationPhase.listening;
       partial = '';
+      hint = null;
+      error = null;
     });
     String heard;
     try {
       heard = await _voice.listenEnglish(onPartial: (p) => _set(() => partial = p));
     } on VoiceUnavailable catch (e) {
-      _set(() => error = e.message);
-      return _fallBackToTyping(notice: false);
-    }
-    _set(() => partial = '');
-    if (heard.trim().isEmpty) {
-      _set(() => phase = ConversationPhase.idle); // nothing heard; tap to try again
+      _set(() {
+        error = e.message;
+        partial = '';
+        phase = ConversationPhase.idle; // tap to try again, or "Type instead"
+      });
+      if (e.message.startsWith('Speech recognition is not available')) _fallBackToTyping(notice: false);
       return;
     }
-    _set(() => phase = ConversationPhase.idle);
-    await sendText(heard);
+    _set(() {
+      partial = '';
+      phase = ConversationPhase.idle;
+      if (heard.trim().isEmpty) {
+        final why = _voice.lastEndReason;
+        hint = "I didn't hear anything. Tap the microphone and speak, or type instead."
+            '${why == null ? '' : ' (browser said: $why)'}';
+      }
+    });
+    if (heard.trim().isNotEmpty) await sendText(heard);
   }
 
   void _micDenied() {
@@ -176,9 +208,14 @@ class ConversationController extends ChangeNotifier {
   Future<void> _sendRecording() async {
     final wav = await _voice.stopInput();
     if (wav == null || wav.length < 3200) {
-      _set(() => phase = ConversationPhase.idle); // under ~0.1 s: nothing to send
+      // Under ~0.1 s of audio: nothing to send.
+      _set(() {
+        phase = ConversationPhase.idle;
+        hint = "I didn't hear anything. Tap the microphone, speak, then tap again to send.";
+      });
       return;
     }
+    _set(() => hint = null);
     _set(() => lines.add(const ChatLine(fromAgent: true, text: '🎤 …')));
     await _run(() => _api.sendAudio(_sessionId!, _version, wav, language: _language));
   }

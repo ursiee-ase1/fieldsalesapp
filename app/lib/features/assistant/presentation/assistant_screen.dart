@@ -229,7 +229,22 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       elevation: 3,
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: _c.voiceMode ? _voiceControls() : _textControls(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_c.canFinish)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _c.busy ? null : _c.finish,
+                  icon: const Icon(Icons.task_alt),
+                  label: const Text('Finish report'),
+                ),
+              ),
+            _c.voiceMode ? _voiceControls() : _textControls(),
+          ],
+        ),
       ),
     );
   }
@@ -293,6 +308,13 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(label, style: theme.textTheme.titleSmall),
+        if (_c.phase == ConversationPhase.listening && _c.partial.isEmpty && _c.hint == null)
+          Text('Speak now. Your words will appear above.', style: theme.textTheme.bodySmall),
+        if (_c.hint != null && (_c.phase == ConversationPhase.idle || _c.phase == ConversationPhase.listening))
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Text(_c.hint!, style: theme.textTheme.bodySmall, textAlign: TextAlign.center),
+          ),
         TextButton.icon(onPressed: _c.switchToTyping, icon: const Icon(Icons.keyboard_outlined), label: const Text('Type instead')),
       ],
     );

@@ -60,20 +60,36 @@ class FakeApi implements AssistantApi {
   }
 
   @override
+  Future<AssistantReply> finish(String sessionId, int version,
+      {required AssistantLanguage language, required bool voiceOut}) {
+    sent.add('finish');
+    return _next();
+  }
+
+  @override
   Future<void> discard(String sessionId) async => sent.add('discard');
 }
 
 class FakeVoice implements VoiceIO {
-  FakeVoice({this.heard = const [], this.micAllowed = true});
+  FakeVoice({this.heard = const [], this.micAllowed = true, this.listenError, this.lastEndReason});
 
   final List<String> heard;
   final bool micAllowed;
+  final Object? listenError;
   final log = <String>[];
   Completer<void>? speaking;
+
+  /// When set, listening stays open until the test completes it.
+  Completer<String>? pendingListen;
+
+  @override
+  String? lastEndReason;
 
   @override
   Future<String> listenEnglish({required void Function(String partial) onPartial}) async {
     log.add('listen');
+    if (listenError != null) throw listenError!;
+    if (pendingListen != null) return pendingListen!.future;
     if (heard.isEmpty) return '';
     final words = heard.removeAt(0);
     onPartial(words);
@@ -129,6 +145,30 @@ void main() {
     expect(c.submitted, isTrue);
     expect(c.summary, isNull);
     expect(c.phase, ConversationPhase.finished);
+  });
+
+  test('"Finish report" brings up the summary, and comes back after "Make changes"', () async {
+    final api = FakeApi([
+      reply('How many people did you speak to?'),
+      reply('Here is your report. Shall I send it?', status: 'awaiting_confirmation', action: 'summary',
+          summary: ['No sales today.']),
+      reply('Here is your report. Shall I send it?', status: 'awaiting_confirmation', action: 'summary',
+          summary: ['No sales today.']),
+    ]);
+    final c = ConversationController(api: api, voice: FakeVoice(), voiceMode: false, language: AssistantLanguage.en);
+    await c.start();
+    expect(c.canFinish, isTrue);
+
+    await c.finish();
+    expect(api.sent.last, 'finish');
+    expect(c.summary, ['No sales today.']);
+    expect(c.canFinish, isFalse, reason: 'the summary card has its own buttons');
+
+    await c.makeChanges();
+    expect(c.summary, isNull);
+    expect(c.canFinish, isTrue, reason: 'the agent can always get back to sending');
+    await c.finish();
+    expect(c.summary, isNotNull);
   });
 
   test('English voice: speaks, listens, sends what was heard', () async {
@@ -191,6 +231,68 @@ void main() {
     await c.start();
     expect(c.voiceMode, isFalse);
     expect(c.error, contains('Microphone permission'));
+  });
+
+  test('nothing heard: says so instead of silently resetting', () async {
+    final c = ConversationController(api: FakeApi([reply('How many sales?')]), voice: FakeVoice(), voiceMode: true,
+        language: AssistantLanguage.en);
+    await c.start(); // speaks, then listens and hears nothing
+    expect(c.phase, ConversationPhase.idle);
+    expect(c.hint, contains("I didn't hear anything"));
+    expect(c.voiceMode, isTrue);
+  });
+
+  test('tapping to talk while it is already listening keeps listening', () async {
+    final voice = FakeVoice()..pendingListen = Completer<String>();
+    final api = FakeApi([reply('How many sales?'), reply('Cash or Mobile Money?')]);
+    final c = ConversationController(api: api, voice: voice, voiceMode: true, language: AssistantLanguage.en);
+    unawaited(c.start());
+    await pumpEventQueue();
+    expect(c.phase, ConversationPhase.listening, reason: 'listens by itself after the question');
+
+    await c.tapMic(); // the agent taps "to start talking"
+    expect(c.phase, ConversationPhase.listening);
+    expect(voice.log, isNot(contains('stopInput')));
+    expect(c.hint, contains("I'm listening"));
+
+    voice.pendingListen!.complete('I sold two books');
+    await pumpEventQueue();
+    expect(api.sent, contains('text:I sold two books'));
+  });
+
+  test('when nothing is heard, the browser\'s reason is shown for diagnosis', () async {
+    final c = ConversationController(api: FakeApi([reply('How many sales?')]),
+        voice: FakeVoice(lastEndReason: 'no-speech'), voiceMode: true, language: AssistantLanguage.en);
+    await c.start();
+    expect(c.hint, endsWith('(browser said: no-speech)'));
+  });
+
+  test('a blocked microphone is explained, and voice stays available to retry', () async {
+    final blocked = VoiceUnavailable(describeSpeechError('not-allowed')!);
+    final c = ConversationController(api: FakeApi([reply('How many sales?')]), voice: FakeVoice(listenError: blocked),
+        voiceMode: true, language: AssistantLanguage.en);
+    await c.start();
+    expect(c.error, contains('microphone is blocked'));
+    expect(c.voiceMode, isTrue);
+    expect(c.phase, ConversationPhase.idle);
+  });
+
+  test('browsers without speech recognition fall back to typing', () async {
+    const none = VoiceUnavailable('Speech recognition is not available here. On a computer, use Chrome or Edge.');
+    final c = ConversationController(api: FakeApi([reply('How many sales?')]), voice: FakeVoice(listenError: none),
+        voiceMode: true, language: AssistantLanguage.en);
+    await c.start();
+    expect(c.voiceMode, isFalse);
+    expect(c.error, contains('Chrome or Edge'));
+  });
+
+  test('recogniser error codes map to actionable messages', () {
+    expect(describeSpeechError('no-speech'), isNull);
+    expect(describeSpeechError('error_no_match'), isNull);
+    expect(describeSpeechError('not-allowed'), contains('blocked'));
+    expect(describeSpeechError('error_permission'), contains('blocked'));
+    expect(describeSpeechError('audio-capture'), contains('No microphone'));
+    expect(describeSpeechError('network'), contains('internet'));
   });
 
   test('no connection: says so plainly and keeps the form as a way out', () async {

@@ -90,7 +90,7 @@ export function applyOperations(
         const p = product(op.product_id);
         if (!p) break;
         if (!isWholeNumber(op.quantity, 1)) {
-          issues.push(`How many ${p.name} did you sell?`);
+          issues.push(`How many did you sell of ${p.name}?`);
           break;
         }
         const pay = payment(op.payment_method);
@@ -151,7 +151,7 @@ export function applyOperations(
         const p = product(op.product_id);
         if (!p) break;
         const n = op.count ?? op.quantity;
-        if (!isWholeNumber(n, 0)) { issues.push(`How many ${p.name} do you have left?`); break; }
+        if (!isWholeNumber(n, 0)) { issues.push(`How many do you have left of ${p.name}?`); break; }
         draft.stock_counts[p.id] = n;
         applied.push(`${n} ${p.name} left`);
         break;

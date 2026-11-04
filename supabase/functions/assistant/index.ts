@@ -15,7 +15,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const PUBLIC_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY');
 const KHAYA_KEY = Deno.env.get('KHAYA_API_KEY');
 
-const ACTIONS = new Set(['start', 'turn', 'confirm', 'abandon']);
+const ACTIONS = new Set(['start', 'turn', 'confirm', 'finish', 'abandon']);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });

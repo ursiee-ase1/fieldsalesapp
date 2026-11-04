@@ -53,6 +53,7 @@ docs/                   planning documents
 | Edge Function secrets | `ANTHROPIC_API_KEY` and/or `GEMINI_API_KEY` | At least one is required for the assistant. Claude is used when its key is set |
 | Edge Function secrets | `LLM_PROVIDER` (optional) | `anthropic` or `gemini`, to choose explicitly |
 | Edge Function secrets | `ANTHROPIC_MODEL`, `GEMINI_MODEL` (optional) | Default to `claude-haiku-5-5` and `gemini-3.1-flash-lite` |
+| Edge Function secrets | `GEMINI_FALLBACK_MODEL` (optional) | A second Gemini model to use when the first is overloaded ("high demand" 503s). Busy models are retried 3 times first, and every configured provider backs up the others |
 | Edge Function secrets | `KHAYA_API_KEY` | GhanaNLP Khaya, for Twi translation, speech recognition and speech output. Without it, the assistant works in English only |
 
 Copy `app/env.example.json` to `app/env.json` and fill it in. `env.json` is git-ignored.

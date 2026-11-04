@@ -131,17 +131,7 @@ export async function runTurn(
   const next = wantsToFinish ? blocking : agenda(draft, ctx)[0] ?? null;
   const ack = applied.length > 0 ? 'Got it.' : '';
 
-  if (!next && issues.length === 0) {
-    // The agent chose to finish: optional questions stay dismissed, even if
-    // they make a change after seeing the summary.
-    for (const i of agenda(draft, ctx)) {
-      if (i.once) draft.asked.push(i.key);
-      if (i.kind === 'stock_count' && !draft.asked.includes('stock_counts')) draft.asked.push('stock_counts');
-    }
-    draft.last_question = null;
-    return { draft, status: 'awaiting_confirmation', action: 'summary', issues, usage,
-      reply: [ack, summaryText(draft, ctx)].filter(Boolean).join(' '), summary: summaryLines(draft, ctx) };
-  }
+  if (!next && issues.length === 0) return toSummary(draft, ctx, ack, issues, usage);
 
   const problems = wantsToFinish && next ? ['Before I can send your report, I need one more answer.', ...issues] : issues;
   const question = next ? templateQuestion(next, ctx) : '';
@@ -164,4 +154,30 @@ export async function runTurn(
 
   if (next) remember(draft, next);
   return { draft, status: 'active', action: 'ask', reply, summary: null, issues, usage };
+}
+
+function toSummary(draft: Draft, ctx: AssistantContext, ack: string, issues: string[], usage: Usage): TurnOutcome {
+  // The agent chose to finish: optional questions stay dismissed, even if
+  // they make a change after seeing the summary.
+  for (const i of agenda(draft, ctx)) {
+    if (i.once && !draft.asked.includes(i.key)) draft.asked.push(i.key);
+    if (i.kind === 'stock_count' && !draft.asked.includes('stock_counts')) draft.asked.push('stock_counts');
+  }
+  draft.last_question = null;
+  return { draft, status: 'awaiting_confirmation', action: 'summary', issues, usage,
+    reply: [ack, summaryText(draft, ctx)].filter(Boolean).join(' '), summary: summaryLines(draft, ctx) };
+}
+
+/**
+ * The "Finish report" button: skip what's optional and show the summary, or
+ * ask only for what's still essential. No LLM call.
+ */
+export function finishTurn(state: Omit<TurnState, 'recentTurns'>): TurnOutcome {
+  const draft: Draft = structuredClone(state.draft);
+  const usage = { input_tokens: 0, output_tokens: 0 };
+  const blocking = blockingItem(draft, state.ctx);
+  if (!blocking) return toSummary(draft, state.ctx, '', [], usage);
+  remember(draft, blocking);
+  return { draft, status: 'active', action: 'ask', summary: null, issues: [], usage,
+    reply: `Before I can send your report, I need one more answer. ${templateQuestion(blocking, state.ctx)}` };
 }

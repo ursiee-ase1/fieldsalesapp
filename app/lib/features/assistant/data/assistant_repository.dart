@@ -80,6 +80,9 @@ abstract interface class AssistantApi {
   Future<AssistantReply> sendAudio(String sessionId, int version, Uint8List wav,
       {required AssistantLanguage language});
   Future<AssistantReply> confirm(String sessionId, int version, {required AssistantLanguage language, required bool voiceOut});
+
+  /// Skip remaining optional questions and go to the summary.
+  Future<AssistantReply> finish(String sessionId, int version, {required AssistantLanguage language, required bool voiceOut});
   Future<void> discard(String sessionId);
 }
 
@@ -132,6 +135,17 @@ class SupabaseAssistantApi implements AssistantApi {
           {required AssistantLanguage language, required bool voiceOut}) =>
       _call({
         'action': 'confirm',
+        'session_id': sessionId,
+        'draft_version': version,
+        'language': language.name,
+        'voice_out': voiceOut,
+      });
+
+  @override
+  Future<AssistantReply> finish(String sessionId, int version,
+          {required AssistantLanguage language, required bool voiceOut}) =>
+      _call({
+        'action': 'finish',
         'session_id': sessionId,
         'draft_version': version,
         'language': language.name,

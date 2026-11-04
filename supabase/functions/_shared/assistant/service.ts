@@ -2,7 +2,7 @@
 // can be tested with fakes. Every database call runs as the signed-in agent.
 import { blockingItem, summaryLines } from './agenda.ts';
 import { emptyDraft, toPayload } from './draft.ts';
-import { openingTurn, runTurn } from './engine.ts';
+import { finishTurn, openingTurn, runTurn } from './engine.ts';
 import type { TurnOutcome } from './engine.ts';
 import type { AssistantContext, Draft, Lang, PhoneMatch, SessionStatus } from './types.ts';
 import { looksEnglish, protect, restore } from '../language/entities.ts';
@@ -28,6 +28,7 @@ export type AssistantRequest =
   | { action: 'turn'; session_id: string; draft_version: number; language: Lang; text?: string;
       audio_wav_b64?: string; voice_out?: boolean }
   | { action: 'confirm'; session_id: string; draft_version: number; language: Lang; voice_out?: boolean }
+  | { action: 'finish'; session_id: string; draft_version: number; language: Lang; voice_out?: boolean }
   | { action: 'abandon'; session_id: string };
 
 export interface AssistantResponse {
@@ -122,6 +123,7 @@ export class AssistantService {
       case 'start': return this.start(req);
       case 'turn': return this.turn(req);
       case 'confirm': return this.confirm(req);
+      case 'finish': return this.finish(req);
       case 'abandon': return this.abandon(req);
       default: throw new AssistantError('validation_failed', 'Unknown action', 400);
     }
@@ -317,6 +319,23 @@ export class AssistantService {
       session_id: s.id, draft_version: version, status: s.status, language: lang, action: 'not_understood' as const,
       agent_text: heard ?? null, reply_text: reply, reply_audio_wav_b64: null, summary: null, notices,
       twi_voice_enabled: ctx.twi_voice_enabled,
+    };
+  }
+
+  /** "Finish report" button: straight to the summary, or the one essential question left. */
+  private async finish(req: Extract<AssistantRequest, { action: 'finish' }>): Promise<AssistantResponse> {
+    const { session: s, draft } = await this.load(req.session_id, req.draft_version);
+    const notices: string[] = [];
+    const outcome = finishTurn({ draft, status: s.status, ctx: s.context });
+    const said = await this.speak(outcome.reply, req.language, !!req.voice_out, s.context, outcome.draft, notices);
+    const version = await this.save(s, outcome.draft, outcome.status, [
+      { role: 'agent', text: 'Finish report', language: 'en', input_mode: 'text', meta: { button: 'finish' } },
+      { role: 'assistant', text: said.text, english_text: said.translated ? outcome.reply : null, language: req.language },
+    ]);
+    return {
+      session_id: s.id, draft_version: version, status: outcome.status, language: req.language, action: outcome.action,
+      agent_text: null, reply_text: said.text, reply_audio_wav_b64: said.audio, summary: outcome.summary, notices,
+      twi_voice_enabled: s.context.twi_voice_enabled,
     };
   }
 
