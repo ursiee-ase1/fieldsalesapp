@@ -1,0 +1,11 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+app/env.json
+
+# Tooling
+node_modules/
+supabase/.temp/
+supabase/.branches/
+.DS_Store
