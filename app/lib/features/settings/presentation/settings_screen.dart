@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design/components.dart';
+import '../../../core/errors.dart';
+import '../data/profile_repository.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/models.dart';
 import '../../auth/domain/permissions.dart';
@@ -30,6 +32,7 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
         ),
+        if (m.role == MemberRole.agent) _AssistantLanguageCard(current: session.context.preferredLanguage),
         if (can(m.role, Capability.manageCompanySettings))
           const SectionCard(
             title: 'Company settings',
@@ -42,6 +45,55 @@ class SettingsScreen extends ConsumerWidget {
           label: const Text('Sign out'),
         ),
       ],
+    );
+  }
+}
+
+class _AssistantLanguageCard extends ConsumerStatefulWidget {
+  const _AssistantLanguageCard({required this.current});
+
+  final String current;
+
+  @override
+  ConsumerState<_AssistantLanguageCard> createState() => _AssistantLanguageCardState();
+}
+
+class _AssistantLanguageCardState extends ConsumerState<_AssistantLanguageCard> {
+  var _busy = false;
+
+  Future<void> _set(String language) async {
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(profileRepositoryProvider).setPreferredLanguage(language);
+      await ref.read(sessionProvider.notifier).refresh();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(describeError(e))));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(
+      title: 'Assistant language',
+      icon: Icons.translate,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('The language the reporting assistant speaks with you. You can mix English and Twi either way.'),
+          const SizedBox(height: 12),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'en', label: Text('English')),
+              ButtonSegment(value: 'tw', label: Text('Twi')),
+            ],
+            selected: {widget.current},
+            onSelectionChanged: _busy ? null : (s) => _set(s.first),
+          ),
+        ],
+      ),
     );
   }
 }

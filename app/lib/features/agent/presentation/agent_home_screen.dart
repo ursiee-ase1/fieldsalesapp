@@ -71,29 +71,26 @@ class _ReportActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = windowSizeOf(context) != WindowSize.compact;
-    final form = FilledButton.icon(
-      onPressed: () => context.push(Routes.agentReport),
+    final voice = FilledButton.icon(
+      onPressed: () => context.push(Routes.agentVoice),
       style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(64)),
-      icon: const Icon(Icons.edit_note),
-      label: const Text('Fill in daily report'),
-    );
-    final voice = FilledButton.tonalIcon(
-      onPressed: null,
-      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
       icon: const Icon(Icons.mic_none),
-      label: const Text('Voice report (coming soon)'),
+      label: const Text('Start voice report'),
     );
     final text = FilledButton.tonalIcon(
-      onPressed: null,
+      onPressed: () => context.push(Routes.agentChat),
       style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
       icon: const Icon(Icons.chat_bubble_outline),
-      label: const Text('Chat report (coming soon)'),
+      label: const Text('Start text report'),
+    );
+    final form = OutlinedButton.icon(
+      onPressed: () => context.push(Routes.agentReport),
+      icon: const Icon(Icons.edit_note),
+      label: const Text('Fill in the form instead'),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        form,
-        const SizedBox(height: AppSpacing.md),
         if (wide)
           Row(children: [Expanded(child: voice), const SizedBox(width: AppSpacing.md), Expanded(child: text)])
         else ...[
@@ -101,6 +98,8 @@ class _ReportActions extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           text,
         ],
+        const SizedBox(height: AppSpacing.sm),
+        form,
       ],
     );
   }

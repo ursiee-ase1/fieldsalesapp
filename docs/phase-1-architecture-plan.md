@@ -487,3 +487,13 @@ Twi speaker recruitment (§12) should **start during Phase 2**, so data is ready
 - STT pricing (third-party): https://diyai.io/ai-tools/speech-to-text/speech-to-text-api-pricing/ · https://www.happyrobot.ai/hub/deepgram-pricing
 - OpenAI realtime pricing (third-party): https://aireiter.com/blog/openai-realtime-api-pricing
 - Claude pricing: Anthropic model reference (claude-api skill, cached 2026-10-06)
+
+---
+
+## Implementation notes (Phase 4)
+
+- **English voice uses the device's own speech recognition and voice** (Android/iOS/browser), not a paid STT/TTS provider. It is free and fast, and works well for English. The speech interface keeps a server-side provider possible later. Twi speech goes through Khaya on the server.
+- **Twi voice is off per company** (`settings.twi_voice_enabled`) until it passes the §12 tests. Typed Twi works through the translation layer.
+- **Khaya calls are capped per company per month** (`settings.khaya_monthly_calls`, default 100 to match the free developer plan). When the cap is reached, the assistant says so and continues in English. The agent can also use the form.
+- **Twi reply templates** (§4.5) are not written yet: they need native speakers. Until then, Twi replies are machine-translated with names and numbers protected, and the summary card on screen stays in English.
+- **The LLM is chosen by configuration.** Claude (`claude-haiku-5-5`) is preferred when its key is set; otherwise Gemini (`gemini-3.1-flash-lite`). The §4.1 extraction eval should still decide the production model.

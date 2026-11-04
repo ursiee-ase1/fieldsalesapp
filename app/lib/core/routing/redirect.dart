@@ -13,6 +13,8 @@ class Routes {
 
   static const agentHome = '/agent';
   static const agentReport = '/agent/report';
+  static const agentVoice = '/agent/assistant/voice';
+  static const agentChat = '/agent/assistant/chat';
   static const agentCustomers = '/agent/customers';
   static const agentMe = '/agent/me';
 

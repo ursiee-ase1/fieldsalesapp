@@ -35,6 +35,7 @@ docs/                   planning documents
 - **Customers**: a phone number is stored only with the customer's consent. Agents see customers they created, are assigned to, or have dealt with; other matches come only through a masked, rate-limited lookup. Duplicate phones create a review for managers and never auto-merge.
 - **Targets**: per day, by company or agent (optionally per product). The most specific target wins, and setting a new one replaces the old one from that date.
 - **Idempotency**: every command carries a client-generated `client_op_id`, and replays return the original result.
+- **AI assistant**: the LLM only *proposes* changes to a draft. Deterministic code validates each one against the catalogue and the agent's data. Anything unclear becomes a question, never a guess. Names and phone numbers are read back in fixed wording, digit by digit. Nothing is saved until the agent confirms the summary, and then it goes through the same `submit_report` as the form. Twi is translated to English for the LLM and back, with numbers and names protected from translation. Audio is never stored.
 
 ## Prerequisites
 
@@ -48,9 +49,18 @@ docs/                   planning documents
 |---|---|---|
 | App (`app/env.json`) | `SUPABASE_URL` | Project URL |
 | App (`app/env.json`) | `SUPABASE_PUBLISHABLE_KEY` | Public client key (Project Settings → API Keys). Never put a secret or service-role key here |
-| Edge Functions | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Injected automatically by Supabase |
+| Edge Functions | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Injected automatically by Supabase |
+| Edge Function secrets | `ANTHROPIC_API_KEY` and/or `GEMINI_API_KEY` | At least one is required for the assistant. Claude is used when its key is set |
+| Edge Function secrets | `LLM_PROVIDER` (optional) | `anthropic` or `gemini`, to choose explicitly |
+| Edge Function secrets | `ANTHROPIC_MODEL`, `GEMINI_MODEL` (optional) | Default to `claude-haiku-5-5` and `gemini-3.1-flash-lite` |
+| Edge Function secrets | `KHAYA_API_KEY` | GhanaNLP Khaya, for Twi translation, speech recognition and speech output. Without it, the assistant works in English only |
 
 Copy `app/env.example.json` to `app/env.json` and fill it in. `env.json` is git-ignored.
+
+Put Edge Function secrets in `supabase/.env.secrets` (git-ignored) and push them with
+`npx supabase secrets set --env-file supabase/.env.secrets`.
+
+> **Gemini free tier:** Google may use free-tier prompts to improve its products. Use it with made-up test data only. Real customer names and numbers need a paid tier, or Claude.
 
 ## Set up the backend
 
@@ -59,7 +69,18 @@ npx supabase login
 npx supabase link --project-ref YOUR-PROJECT-REF
 npx supabase db push --remote                 # apply migrations to the linked project
 npx supabase functions deploy invite-member
+npx supabase functions deploy assistant
 ```
+
+**Twi voice** (speaking and hearing Twi) is off per company until it passes testing with Twi speakers. Typed Twi works without it. To switch it on for a company, and to set its monthly Khaya allowance (the free plan has 100 calls; each Twi chat turn uses about 2, each voice turn about 4):
+
+```sql
+update public.companies
+set settings = settings || '{"twi_voice_enabled": true, "khaya_monthly_calls": 100}'
+where name = 'Your Company';
+```
+
+English voice uses the phone's (or browser's) built-in speech recognition and voice, so it needs no provider and costs nothing.
 
 Auth settings in the hosted dashboard (Authentication → Sign In / Providers). `config.toml` only applies to a local stack, so set these by hand:
 
@@ -82,9 +103,12 @@ First use: **Create an account** (email) → **Set up your company** → you're 
 ## Tests and checks
 
 ```bash
-cd supabase/tests && npm install && npm test         # database: tenant isolation, roles, audit
-node --test supabase/functions/_shared/phone.test.ts # Edge Function helpers (Node 22.6+)
+cd supabase/tests && npm install && npm test         # database: tenant isolation, roles, audit, assistant sessions
+cd supabase/functions && node --test "_shared/**/*.test.ts"   # assistant engine, Twi layer, providers (Node 22.6+)
+cd supabase/functions && npx deno check assistant/index.ts invite-member/index.ts   # type-check as deployed
 cd app && flutter analyze && flutter test            # Flutter
 ```
+
+The assistant tests use a scripted fake LLM and a fake Khaya, so they need no keys and cost nothing.
 
 The database tests run the real migrations in [PGlite](https://pglite.dev) (Postgres in WebAssembly) with a small stand-in for Supabase's `auth` schema and roles. No Docker or hosted project is needed.

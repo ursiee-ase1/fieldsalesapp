@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/agent/presentation/agent_home_screen.dart';
+import '../../features/assistant/presentation/assistant_screen.dart';
 import '../../features/auth/application/session_controller.dart';
 import '../../features/auth/domain/models.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
@@ -110,6 +111,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: Routes.suspended, builder: (_, _) => const SuspendedScreen()),
       GoRoute(path: Routes.manage, redirect: (_, _) => Routes.overview),
       GoRoute(path: Routes.agentReport, builder: (_, _) => const ReportFormScreen()),
+      GoRoute(path: Routes.agentVoice, builder: (_, _) => const AssistantScreen(voice: true)),
+      GoRoute(path: Routes.agentChat, builder: (_, _) => const AssistantScreen(voice: false)),
       _shell(_agentDestinations),
       _shell(_managerDestinations),
     ],

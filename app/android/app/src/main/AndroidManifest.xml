@@ -1,6 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network for the backend; microphone for voice reports. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Android 11+: let the app find the speech recogniser and text-to-speech engines. -->
+    <queries>
+        <intent><action android:name="android.speech.RecognitionService"/></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE"/></intent>
+    </queries>
     <application
-        android:label="field_sales"
+        android:label="Field Sales"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
