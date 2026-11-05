@@ -10,6 +10,8 @@ import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/auth/presentation/sign_up_screen.dart';
 import '../../features/auth/presentation/status_screens.dart';
 import '../../features/customers/presentation/customers_screen.dart';
+import '../../features/dashboard/presentation/overview_screen.dart';
+import '../../features/dashboard/presentation/reports_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
 import '../../features/members/presentation/agents_screen.dart';
 import '../../features/onboarding/presentation/create_company_screen.dart';
@@ -17,7 +19,6 @@ import '../../features/reports/presentation/report_form_screen.dart';
 import '../../features/sales/presentation/sales_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../design/adaptive_nav.dart';
-import '../design/components.dart';
 import 'redirect.dart';
 
 class _Destination {
@@ -27,12 +28,6 @@ class _Destination {
   final NavItem item;
   final Widget screen;
 }
-
-const _comingSoon = StateView.empty(
-  icon: Icons.construction_outlined,
-  title: 'Coming soon',
-  message: 'This section will be available in an upcoming release.',
-);
 
 final _agentDestinations = [
   const _Destination(Routes.agentHome,
@@ -44,19 +39,20 @@ final _agentDestinations = [
 ];
 
 final _managerDestinations = [
+  // Order matters on phones: the first four are in the bottom bar, the rest under "More".
   const _Destination(Routes.overview,
-      NavItem(label: 'Overview', icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard), _comingSoon),
-  const _Destination(Routes.agents,
-      NavItem(label: 'Agents', icon: Icons.groups_outlined, selectedIcon: Icons.groups), AgentsScreen()),
+      NavItem(label: 'Overview', icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard), OverviewScreen()),
   const _Destination(Routes.sales,
       NavItem(label: 'Sales', icon: Icons.point_of_sale_outlined, selectedIcon: Icons.point_of_sale), SalesScreen()),
-  const _Destination(Routes.customers,
-      NavItem(label: 'Customers', icon: Icons.people_outline, selectedIcon: Icons.people), CustomersScreen()),
   const _Destination(Routes.inventory,
       NavItem(label: 'Inventory', icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2),
       InventoryScreen()),
+  const _Destination(Routes.customers,
+      NavItem(label: 'Customers', icon: Icons.people_outline, selectedIcon: Icons.people), CustomersScreen()),
+  const _Destination(Routes.agents,
+      NavItem(label: 'Agents', icon: Icons.groups_outlined, selectedIcon: Icons.groups), AgentsScreen()),
   const _Destination(Routes.reports,
-      NavItem(label: 'Reports', icon: Icons.insert_chart_outlined, selectedIcon: Icons.insert_chart), _comingSoon),
+      NavItem(label: 'Reports', icon: Icons.insert_chart_outlined, selectedIcon: Icons.insert_chart), ReportsScreen()),
   const _Destination(Routes.settings,
       NavItem(label: 'Settings', icon: Icons.settings_outlined, selectedIcon: Icons.settings), SettingsScreen()),
 ];

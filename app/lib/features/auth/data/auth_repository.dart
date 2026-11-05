@@ -5,8 +5,16 @@ import '../domain/models.dart';
 
 enum SignUpResult { signedIn, confirmationRequired }
 
+/// Sign-up attempted with an email that already has an account.
+class AccountExists implements Exception {
+  const AccountExists();
+}
+
 abstract interface class AuthRepository {
   bool get hasSession;
+
+  /// Email of the signed-in account (null for phone logins).
+  String? get currentEmail;
 
   /// Emits whenever the user signs in or out.
   Stream<void> get sessionChanges;
@@ -25,6 +33,12 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   bool get hasSession => _client.auth.currentSession != null;
+
+  @override
+  String? get currentEmail {
+    final email = _client.auth.currentUser?.email;
+    return email == null || email.endsWith('@$phoneLoginDomain') ? null : email;
+  }
 
   @override
   Stream<void> get sessionChanges => _client.auth.onAuthStateChange
@@ -49,7 +63,16 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Future<SignUpResult> signUpWithEmail(String email, String password) async {
-    final response = await _client.auth.signUp(email: email.trim(), password: password);
+    final AuthResponse response;
+    try {
+      response = await _client.auth.signUp(email: email.trim(), password: password);
+    } on AuthException catch (e) {
+      if (e.message.toLowerCase().contains('already registered')) throw const AccountExists();
+      rethrow;
+    }
+    // With email confirmation on, Supabase doesn't reveal existing accounts
+    // with an error; it returns a user with no identities instead.
+    if (response.user != null && (response.user!.identities?.isEmpty ?? false)) throw const AccountExists();
     return response.session == null ? SignUpResult.confirmationRequired : SignUpResult.signedIn;
   }
 

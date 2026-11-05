@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/design/components.dart';
 import '../../../core/errors.dart';
 import '../data/profile_repository.dart';
+import 'company_settings_card.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/models.dart';
 import '../../auth/domain/permissions.dart';
@@ -33,12 +34,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
         if (m.role == MemberRole.agent) _AssistantLanguageCard(current: session.context.preferredLanguage),
-        if (can(m.role, Capability.manageCompanySettings))
-          const SectionCard(
-            title: 'Company settings',
-            icon: Icons.business_outlined,
-            child: Text('Products, targets, reminders and assistant settings will be managed here.'),
-          ),
+        if (can(m.role, Capability.manageCompanySettings)) const CompanySettingsCard(),
         OutlinedButton.icon(
           onPressed: () => ref.read(sessionProvider.notifier).signOut(),
           icon: const Icon(Icons.logout),

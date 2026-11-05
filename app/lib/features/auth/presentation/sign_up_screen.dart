@@ -23,7 +23,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _repeat = TextEditingController();
   var _busy = false;
+  var _exists = false;
   String? _error;
   String? _info;
 
@@ -31,6 +33,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _repeat.dispose();
     super.dispose();
   }
 
@@ -40,6 +43,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       _busy = true;
       _error = null;
       _info = null;
+      _exists = false;
     });
     try {
       final result = await ref.read(authRepositoryProvider).signUpWithEmail(_email.text, _password.text);
@@ -47,6 +51,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         if (mounted) setState(() => _info = 'Check your email to confirm your account, then sign in.');
       } else {
         await ref.read(sessionProvider.notifier).refresh();
+      }
+    } on AccountExists {
+      if (mounted) {
+        setState(() {
+          _exists = true;
+          _error = 'An account with this email already exists. Sign in instead.';
+        });
       }
     } catch (e) {
       if (mounted) setState(() => _error = describeError(e));
@@ -80,9 +91,25 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               decoration: const InputDecoration(labelText: 'Password', helperText: 'At least 8 characters'),
               validator: (v) => (v ?? '').length < 8 ? 'Use at least 8 characters' : null,
             ),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _repeat,
+              obscureText: true,
+              autofillHints: const [AutofillHints.newPassword],
+              decoration: const InputDecoration(labelText: 'Type the password again'),
+              validator: (v) => v != _password.text ? 'The passwords do not match' : null,
+            ),
             if (_error != null) ...[
               const SizedBox(height: AppSpacing.md),
               InlineMessage.error(_error!),
+              if (_exists) ...[
+                const SizedBox(height: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: () => context.go(Routes.signIn),
+                  icon: const Icon(Icons.login),
+                  label: const Text('Sign in'),
+                ),
+              ],
             ],
             if (_info != null) ...[
               const SizedBox(height: AppSpacing.md),

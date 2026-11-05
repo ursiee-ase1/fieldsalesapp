@@ -11,7 +11,7 @@ class NavItem {
 }
 
 /// Navigation that adapts to width:
-///  * compact: bottom bar (≤5 items) or a drawer (more items)
+///  * compact: bottom bar (≤5 items), or the first four plus "More"
 ///  * medium: navigation rail
 ///  * expanded: extended navigation rail
 class AdaptiveNavScaffold extends StatelessWidget {
@@ -34,12 +34,40 @@ class AdaptiveNavScaffold extends StatelessWidget {
 
   static const maxBottomBarItems = 5;
 
+  Future<void> _showMore(BuildContext context, int from) async {
+    final chosen = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (header != null)
+              Padding(padding: const EdgeInsets.fromLTRB(AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.sm), child: header),
+            for (var i = from; i < items.length; i++)
+              ListTile(
+                leading: Icon(i == selectedIndex ? items[i].selectedIcon : items[i].icon),
+                title: Text(items[i].label),
+                selected: i == selectedIndex,
+                onTap: () => Navigator.of(sheet).pop(i),
+              ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null) onSelected(chosen);
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = windowSizeOf(context);
     final title = Text(items[selectedIndex].label);
 
     if (size == WindowSize.compact) {
+      NavigationDestination dest(NavItem item) =>
+          NavigationDestination(icon: Icon(item.icon), selectedIcon: Icon(item.selectedIcon), label: item.label);
+
       if (items.length <= maxBottomBarItems) {
         return Scaffold(
           appBar: AppBar(title: title),
@@ -47,27 +75,27 @@ class AdaptiveNavScaffold extends StatelessWidget {
           bottomNavigationBar: NavigationBar(
             selectedIndex: selectedIndex,
             onDestinationSelected: onSelected,
-            destinations: [
-              for (final item in items)
-                NavigationDestination(icon: Icon(item.icon), selectedIcon: Icon(item.selectedIcon), label: item.label),
-            ],
+            destinations: [for (final item in items) dest(item)],
           ),
         );
       }
+
+      // Too many for one bar: the first four, plus "More" for the rest.
+      const primary = maxBottomBarItems - 1;
+      final inMore = selectedIndex >= primary;
       return Scaffold(
         appBar: AppBar(title: title),
         body: body,
-        drawer: NavigationDrawer(
-          selectedIndex: selectedIndex,
-          onDestinationSelected: (i) {
-            Navigator.of(context).pop();
-            onSelected(i);
-          },
-          children: [
-            if (header != null)
-              Padding(padding: const EdgeInsets.fromLTRB(28, AppSpacing.lg, AppSpacing.lg, AppSpacing.md), child: header),
-            for (final item in items)
-              NavigationDrawerDestination(icon: Icon(item.icon), selectedIcon: Icon(item.selectedIcon), label: Text(item.label)),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: inMore ? primary : selectedIndex,
+          onDestinationSelected: (i) => i < primary ? onSelected(i) : _showMore(context, primary),
+          destinations: [
+            for (final item in items.take(primary)) dest(item),
+            NavigationDestination(
+              icon: const Icon(Icons.more_horiz),
+              selectedIcon: Icon(inMore ? items[selectedIndex].selectedIcon : Icons.more_horiz),
+              label: inMore ? items[selectedIndex].label : 'More',
+            ),
           ],
         ),
       );

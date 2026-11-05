@@ -4,9 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 String describeError(Object error) {
   if (error is AuthException) {
     if (_isNetworkError(error.message)) return _offlineMessage;
-    if (error.message.toLowerCase().contains('invalid login credentials')) {
-      return 'That phone/email and password do not match.';
-    }
+    final m = error.message.toLowerCase();
+    if (m.contains('invalid login credentials')) return 'Wrong sign-in details. Check them and try again.';
+    if (m.contains('email not confirmed')) return 'Confirm your email first: open the link we sent you, then sign in.';
+    if (m.contains('password should be')) return 'Choose a longer password (at least 8 characters).';
     return error.message;
   }
   if (error is PostgrestException) {

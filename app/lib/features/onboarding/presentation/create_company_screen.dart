@@ -62,6 +62,8 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _AccountNotice(email: ref.read(authRepositoryProvider).currentEmail),
+            const SizedBox(height: AppSpacing.lg),
             TextFormField(
               controller: _company,
               textCapitalization: TextCapitalization.words,
@@ -94,10 +96,49 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
             const SizedBox(height: AppSpacing.lg),
             BusyButton(label: 'Create company', busy: _busy, onPressed: _submit),
             const SizedBox(height: AppSpacing.md),
-            TextButton(
+            OutlinedButton.icon(
               onPressed: () => ref.read(sessionProvider.notifier).signOut(),
-              child: const Text('Sign out'),
+              icon: const Icon(Icons.switch_account_outlined),
+              label: const Text('Use a different account'),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Makes it obvious which account is signed in, so a mistyped email or a
+/// manager who should have been invited doesn't create a stray company.
+class _AccountNotice extends StatelessWidget {
+  const _AccountNotice({required this.email});
+
+  final String? email;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.account_circle_outlined),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(email == null ? 'You are signed in.' : 'Signed in as $email',
+                    style: theme.textTheme.titleSmall),
+              ),
+            ]),
+            const SizedBox(height: AppSpacing.sm),
+            const Text("This account isn't part of a company yet."),
+            const SizedBox(height: AppSpacing.xs),
+            const Text('• Setting up a new company? Fill in the details below.'),
+            const Text('• Joining an existing company? Ask its administrator to add you, '
+                'then sign in with the details they give you.'),
+            const Text('• Wrong account? Tap "Use a different account".'),
           ],
         ),
       ),

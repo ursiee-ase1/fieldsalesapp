@@ -2,13 +2,23 @@ import 'dart:async';
 
 import 'package:field_sales/features/auth/data/auth_repository.dart';
 import 'package:field_sales/features/auth/domain/models.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 class FakeAuthRepository implements AuthRepository {
-  FakeAuthRepository({this.signedIn = false, UserContext? context})
+  FakeAuthRepository({this.signedIn = false, UserContext? context, this.wrongPassword = false, this.accountExists = false})
       : context = context ?? const UserContext(userId: 'u1');
 
   bool signedIn;
   UserContext context;
+
+  /// Sign-in fails the way Supabase does for bad credentials.
+  bool wrongPassword;
+
+  /// Sign-up hits an email that is already registered.
+  bool accountExists;
+
+  @override
+  String? currentEmail = 'admin@alpha.com';
   final calls = <String>[];
   final _changes = StreamController<void>.broadcast();
 
@@ -26,17 +36,24 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<void> signInWithPhone(String phoneE164, String password) async {
     calls.add('phone:$phoneE164');
+    if (wrongPassword) throw const AuthException('Invalid login credentials');
     signedIn = true;
   }
 
   @override
   Future<void> signInWithEmail(String email, String password) async {
     calls.add('email:$email');
+    if (wrongPassword) throw const AuthException('Invalid login credentials');
     signedIn = true;
   }
 
   @override
-  Future<SignUpResult> signUpWithEmail(String email, String password) async => SignUpResult.signedIn;
+  Future<SignUpResult> signUpWithEmail(String email, String password) async {
+    calls.add('signup:$email');
+    if (accountExists) throw const AccountExists();
+    signedIn = true;
+    return SignUpResult.signedIn;
+  }
 
   @override
   Future<void> signOut() async => signedIn = false;

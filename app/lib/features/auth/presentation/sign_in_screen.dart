@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 import '../../../core/design/components.dart';
 import '../../../core/design/tokens.dart';
@@ -48,6 +49,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         await repo.signInWithEmail(_identifier.text, _password.text);
       }
       await ref.read(sessionProvider.notifier).refresh();
+    } on AuthException catch (e) {
+      final wrongDetails = e.message.toLowerCase().contains('invalid login credentials');
+      if (mounted) {
+        setState(() => _error = !wrongDetails
+            ? describeError(e)
+            : _method == _Method.phone
+                ? 'Wrong phone number or password. Check them and try again.'
+                : 'Wrong email or password. Check them and try again.');
+      }
     } catch (e) {
       if (mounted) setState(() => _error = describeError(e));
     } finally {
@@ -107,6 +117,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             if (_error != null) ...[
               const SizedBox(height: AppSpacing.md),
               InlineMessage.error(_error!),
+              if (_method == _Method.phone) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text('Field agents: if you have forgotten your password, ask your manager to reset it.',
+                    style: Theme.of(context).textTheme.bodySmall),
+              ],
             ],
             const SizedBox(height: AppSpacing.lg),
             BusyButton(label: 'Sign in', busy: _busy, onPressed: _submit),
